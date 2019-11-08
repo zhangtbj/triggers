@@ -81,28 +81,30 @@ func (s *EventListenerSpec) validate(ctx context.Context, el *EventListener) *ap
 }
 
 func (i *EventInterceptor) validate(ctx context.Context, namespace string) *apis.FieldError {
-	if i.ObjectRef == nil || len(i.ObjectRef.Name) == 0 {
-		return apis.ErrMissingField("interceptor.objectRef")
+	if (i.ObjectRef == nil || len(i.ObjectRef.Name) == 0) && i.Github == nil && i.Gitlab == nil {
+		return apis.ErrMissingField("interceptor.type")
 	}
-	// Optional explicit match
-	if len(i.ObjectRef.Kind) != 0 {
-		if i.ObjectRef.Kind != "Service" {
-			return apis.ErrInvalidValue(fmt.Errorf("Invalid kind"), "interceptor.objectRef.kind")
+	if i.ObjectRef != nil {
+		// Optional explicit match
+		if len(i.ObjectRef.Kind) != 0 {
+			if i.ObjectRef.Kind != "Service" {
+				return apis.ErrInvalidValue(fmt.Errorf("Invalid kind"), "interceptor.objectRef.kind")
+			}
 		}
-	}
-	// Optional explicit match
-	if len(i.ObjectRef.APIVersion) != 0 {
-		if i.ObjectRef.APIVersion != "v1" {
-			return apis.ErrInvalidValue(fmt.Errorf("Invalid apiVersion"), "interceptor.objectRef.apiVersion")
+		// Optional explicit match
+		if len(i.ObjectRef.APIVersion) != 0 {
+			if i.ObjectRef.APIVersion != "v1" {
+				return apis.ErrInvalidValue(fmt.Errorf("Invalid apiVersion"), "interceptor.objectRef.apiVersion")
+			}
 		}
-	}
-	if len(i.ObjectRef.Namespace) != 0 {
-		namespace = i.ObjectRef.Namespace
-	}
-	clientset := ctx.Value("clientSet").(dynamic.Interface)
-	_, err := clientset.Resource(services).Namespace(namespace).Get(i.ObjectRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return apis.ErrInvalidValue(err, "interceptor.objectRef.name")
+		if len(i.ObjectRef.Namespace) != 0 {
+			namespace = i.ObjectRef.Namespace
+		}
+		clientset := ctx.Value("clientSet").(dynamic.Interface)
+		_, err := clientset.Resource(services).Namespace(namespace).Get(i.ObjectRef.Name, metav1.GetOptions{})
+		if err != nil {
+			return apis.ErrInvalidValue(err, "interceptor.objectRef.name")
+		}
 	}
 	for i, header := range i.Header {
 		// Enforce non-empty canonical header keys

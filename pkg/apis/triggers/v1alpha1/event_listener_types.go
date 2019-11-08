@@ -81,6 +81,19 @@ type EventInterceptor struct {
 	// name to use as the EventInterceptor. Either objectRef or url can be specified
 	// +optional
 	ObjectRef *corev1.ObjectReference `json:"objectRef,omitempty"`
+
+	Github *GithubInterceptor `json:"github,omitempty"`
+	Gitlab *GitlabInterceptor `json:"gitlab,omitempty"`
+}
+
+type GithubInterceptor struct {
+	RepoName      string `json:"repoName,omitempty"`
+	BranchPattern string `json:"branchPattern,omitempty"`
+	EventType     string `json:"eventType,omitempty"`
+}
+
+type GitlabInterceptor struct {
+	EventType string `json:"eventType,omitempty"`
 }
 
 // EventListenerBinding refers to a particular TriggerBinding resource.

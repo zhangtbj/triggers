@@ -101,20 +101,42 @@ func (r Resource) HandleEvent(response http.ResponseWriter, request *http.Reques
 
 func (r Resource) executeTrigger(payload []byte, request *http.Request, trigger triggersv1.EventListenerTrigger, eventID string, result chan int) {
 	if trigger.Interceptor != nil {
-		interceptorURL, err := GetURI(trigger.Interceptor.ObjectRef, r.EventListenerNamespace) // TODO: Cache this result or do this on initialization
-		if err != nil {
-			r.Logger.Errorf("Could not resolve Interceptor Service URI: %q", err)
-			result <- http.StatusAccepted
-			return
-		}
+		if trigger.Interceptor.Github != nil {
+			evt := trigger.Interceptor.Github.EventType
+			if evt != "" {
+				gevt := request.Header.Get("X-Github-Event")
+				if evt != gevt {
+					result <- http.StatusAccepted
+					r.Logger.Errorf("Github event type %s does not match filter %s", gevt, evt)
+					return
+				}
+			}
+		} else if trigger.Interceptor.Gitlab != nil {
+			evt := trigger.Interceptor.Gitlab.EventType
+			if evt != "" {
+				gevt := request.Header.Get("X-Gitlab-Event")
+				if evt != gevt {
+					result <- http.StatusAccepted
+					r.Logger.Errorf("Gitlab event type %s does not match filter %s", gevt, evt)
+					return
+				}
+			}
+		} else {
+			interceptorURL, err := GetURI(trigger.Interceptor.ObjectRef, r.EventListenerNamespace) // TODO: Cache this result or do this on initialization
+			if err != nil {
+				r.Logger.Errorf("Could not resolve Interceptor Service URI: %q", err)
+				result <- http.StatusAccepted
+				return
+			}
 
-		modifiedPayload, err := r.processEvent(interceptorURL, request, payload, trigger.Interceptor.Header, interceptorTimeout)
-		if err != nil {
-			r.Logger.Errorf("Error Intercepting Event (EventID: %s): %q", eventID, err)
-			result <- http.StatusAccepted
-			return
+			modifiedPayload, err := r.processEvent(interceptorURL, request, payload, trigger.Interceptor.Header, interceptorTimeout)
+			if err != nil {
+				r.Logger.Errorf("Error Intercepting Event (EventID: %s): %q", eventID, err)
+				result <- http.StatusAccepted
+				return
+			}
+			payload = modifiedPayload
 		}
-		payload = modifiedPayload
 	}
 
 	binding, err := template.ResolveBinding(trigger,
