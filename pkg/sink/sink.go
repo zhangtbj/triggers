@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/tektoncd/triggers/pkg/interceptors/github"
+
 	"github.com/tektoncd/triggers/pkg/interceptors"
 
 	"github.com/tidwall/gjson"
@@ -39,12 +41,14 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	discoveryclient "k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 )
 
 // Sink defines the sink resource for processing incoming events for the
 // EventListener.
 type Sink struct {
+	KubeClientSet          kubernetes.Interface
 	TriggersClient         triggersclientset.Interface
 	DiscoveryClient        discoveryclient.DiscoveryInterface
 	RESTClient             restclient.Interface
@@ -84,13 +88,15 @@ func (r Sink) HandleEvent(response http.ResponseWriter, request *http.Request) {
 		if t.Interceptor != nil {
 			switch {
 			case t.Interceptor.Webhook != nil:
-				interceptor = webhook.NewInterceptor(t.Interceptor, r.HTTPClient, r.EventListenerNamespace, r.Logger)
+				interceptor = webhook.NewInterceptor(t.Interceptor.Webhook, r.HTTPClient, r.EventListenerNamespace, r.Logger)
+			case t.Interceptor.Github != nil:
+				interceptor = github.NewInterceptor(t.Interceptor.Github, r.KubeClientSet, r.Logger)
 			}
 		}
 		go func() {
 			finalPayload := event
 			if interceptor != nil {
-				payload, err := interceptor.ExecuteTrigger(event, request, t, eventID)
+				payload, err := interceptor.ExecuteTrigger(event, request, &t, eventID)
 				if err != nil {
 					r.Logger.Error(err)
 					result <- http.StatusAccepted
